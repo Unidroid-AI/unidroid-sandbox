@@ -1,0 +1,11 @@
+# Frozen inputs of ghcr.io/unidroid-ai/sandbox-mujoco at this version.
+#
+# Another MuJoCo version is a sibling directory and is published as its own digest of the
+# same image name. Validators pin the digest.
+
+BASE_IMAGE=python:3.12-slim-bookworm
+MUJOCO_VERSION=4.0.0
+# When set, that commit's dependencies are installed and the package is removed. The
+# validator still mounts the pinned checkout. Leave empty to publish MuJoCo alone.
+EVAL_REPO_URL=
+EVAL_REPO_COMMIT=

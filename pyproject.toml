@@ -1,0 +1,13 @@
+[project]
+name = "unidroid-sandbox"
+version = "0.1.0"
+description = "The Unidroid evaluation sandbox image: Isaac Sim, Isaac Lab, and isaac-eval's dependencies"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "BSD-3-Clause" }
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,115 @@
+# Build one sandbox version, or every version under sandboxes/, and push it to ghcr.io.
+# Validators pin the digest this prints. They do not build the Dockerfiles.
+#
+# A sandbox is sandboxes/<engine>/<version>/ with a Dockerfile, entrypoint.sh and versions.lock.
+# It is published as ghcr.io/unidroid-ai/sandbox-<engine>:<version>. The digest is the pin, so two
+# versions of one engine stay pullable side by side.
+#
+# Isaac Lab needs secret NGC_API_KEY and a runner with enough disk (repository variable
+# SANDBOX_RUNNER). A versions.lock that sets NEEDS_NGC=1 fails the job when the secret is missing.
+# Start the workflow by hand with the sandbox input set to one directory, for example
+# isaaclab/6.1-3.0, to publish a single version.
+
+name: publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      sandbox:
+        description: "engine/version to build, such as isaaclab/6.1-3.0. Empty builds every sandbox."
+        required: false
+        default: ""
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.find.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: find
+        env:
+          SANDBOX: ${{ github.event.inputs.sandbox }}
+        run: |
+          set -euo pipefail
+          matrix=$(python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          want = os.environ.get("SANDBOX", "").strip().strip("/")
+          found = []
+          for dockerfile in sorted(Path("sandboxes").glob("*/*/Dockerfile")):
+              version_dir = dockerfile.parent
+              engine, version = version_dir.relative_to("sandboxes").parts
+              rel = f"{engine}/{version}"
+              if want and rel != want:
+                  continue
+              if not (version_dir / "entrypoint.sh").is_file() or not (version_dir / "versions.lock").is_file():
+                  raise SystemExit(f"{rel} needs entrypoint.sh and versions.lock next to the Dockerfile")
+              found.append({"engine": engine, "version": version, "path": version_dir.as_posix()})
+          if not found:
+              raise SystemExit(f"no sandbox at sandboxes/{want or '*/*'}")
+          print(json.dumps(found))
+          PY
+          )
+          {
+            echo "matrix<<EOF"
+            echo "${matrix}"
+            echo "EOF"
+          } >> "${GITHUB_OUTPUT}"
+
+  image:
+    needs: list
+    runs-on: ${{ vars.SANDBOX_RUNNER != '' && vars.SANDBOX_RUNNER || 'ubuntu-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        sandbox: ${{ fromJson(needs.list.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in and build ${{ matrix.sandbox.engine }} ${{ matrix.sandbox.version }}
+        env:
+          NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
+          ENGINE: ${{ matrix.sandbox.engine }}
+          VERSION: ${{ matrix.sandbox.version }}
+          SANDBOX_PATH: ${{ matrix.sandbox.path }}
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          cd "${SANDBOX_PATH}"
+          needs_ngc=0
+          args=()
+          while IFS= read -r line || [ -n "${line}" ]; do
+            case "${line}" in
+              ''|\#*) continue ;;
+            esac
+            name=${line%%=*}
+            value=${line#*=}
+            if [ "${name}" = "NEEDS_NGC" ]; then
+              [ "${value}" = "1" ] && needs_ngc=1
+              continue
+            fi
+            if grep -qE "^ARG ${name}(=|[[:space:]]|$)" Dockerfile; then
+              args+=(--build-arg "${name}=${value}")
+            fi
+          done < versions.lock
+          if [ "${needs_ngc}" = "1" ]; then
+            if [ -z "${NGC_API_KEY}" ]; then
+              echo "NGC_API_KEY is not set; this sandbox pulls from nvcr.io" >&2
+              exit 1
+            fi
+            echo "${NGC_API_KEY}" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+          fi
+          image="ghcr.io/unidroid-ai/sandbox-${ENGINE}"
+          docker build "${args[@]}" -t "${image}:${VERSION}" -t "${image}:${GITHUB_SHA}" .
+          docker push "${image}:${VERSION}"
+          docker push "${image}:${GITHUB_SHA}"
+          digest=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "${image}:${VERSION}")
+          echo "Put this in the validator config as sandbox.image:"
+          echo "${image}@${digest}"
