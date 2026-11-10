@@ -4,14 +4,16 @@
 # built from this directory. Another version of Isaac Lab is a sibling directory. Change a pin
 # here, publish, then put the new digest in the validator config.
 #
-# NEEDS_NGC is read by the publish workflow and is not a Docker build arg.
-
-NEEDS_NGC=1
+# Isaac Sim is the public pip package on pypi.nvidia.com. That index does not use an NGC key.
 #
 # ISAACLAB_COMMIT is release/3.0.0 as of 2026-11-09 (the branch the old Dockerfile cloned).
 # The branch moves; this commit does not. v3.0.0 is e3f7d9ff1f5d7f8280de3ece9000b7117f66bcf4.
 
-ISAACSIM_IMAGE=nvcr.io/nvidia/isaac-sim:6.1.0
+BASE_IMAGE=python:3.12-bookworm
+ISAACSIM_SPEC=isaacsim[all,extscache]==6.1.0.0
+TORCH_VERSION=2.11.0
+TORCHVISION_VERSION=0.26.0
+TORCH_INDEX=https://download.pytorch.org/whl/cu130
 ISAACLAB_REPO=https://github.com/isaac-sim/IsaacLab.git
 ISAACLAB_REF=release/3.0.0
 ISAACLAB_COMMIT=44044b0963001962abe5701133427e37b003fffe

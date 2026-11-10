@@ -5,8 +5,9 @@
 # It is published as ghcr.io/unidroid-ai/sandbox-<engine>:<version>. The digest is the pin, so two
 # versions of one engine stay pullable side by side.
 #
-# Isaac Lab needs secret NGC_API_KEY and a runner with enough disk (repository variable
-# SANDBOX_RUNNER). A versions.lock that sets NEEDS_NGC=1 fails the job when the secret is missing.
+# A sandbox that sets NEEDS_NGC=1 in versions.lock logs in to nvcr.io with secret NGC_API_KEY
+# and fails when that secret is missing. Isaac Lab does not: it installs the public pip package.
+# Set the repository variable SANDBOX_RUNNER when the default hosted runner is too small.
 # Start the workflow by hand with the sandbox input set to one directory, for example
 # isaaclab/6.1-3.0, to publish a single version.
 
