@@ -32,7 +32,7 @@ sandboxes/<engine>/<version>/
 
 A new version is a new directory. A new engine is a new directory under `sandboxes/` with the same three files. The publish workflow finds them; the image name is `sandbox-` plus the engine directory name.
 
-`versions.lock` is the input of that version. `EVAL_REPO_COMMIT`, when set, is the commit whose dependencies are installed and then uninstalled. The validator's `pins.repos` still selects the code that runs. Isaac Lab `6.1-3.0` requires `EVAL_REPO_COMMIT` before it can be published. It installs Isaac Sim with pip from `pypi.nvidia.com`, so the build does not use an NGC API key. A sandbox that still pulls from `nvcr.io` sets `NEEDS_NGC=1` and then needs the `NGC_API_KEY` secret.
+`versions.lock` is the input of that version. `EVAL_REPO_COMMIT`, when set, is the commit whose dependencies are installed and then uninstalled. An empty value clones that repository's default branch. The validator's `pins.repos` still selects the code that runs. Isaac Lab `6.1-3.0` installs Isaac Sim with pip from `pypi.nvidia.com`, so the build does not use an NGC API key. A sandbox that still pulls from `nvcr.io` sets `NEEDS_NGC=1` and then needs the `NGC_API_KEY` secret.
 
 ## Publish
 

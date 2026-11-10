@@ -64,7 +64,6 @@ USER root
 WORKDIR /opt/unidroid
 
 RUN test -n "${ISAACLAB_COMMIT}" || (echo "build with --build-arg ISAACLAB_COMMIT=<commit of Isaac Lab> (see versions.lock)" >&2; exit 1)
-RUN test -n "${EVAL_REPO_COMMIT}" || (echo "set EVAL_REPO_COMMIT in versions.lock to the isaac-eval commit whose dependencies this image installs" >&2; exit 1)
 RUN test -n "${ISAACSIM_SPEC}" || (echo "set ISAACSIM_SPEC in versions.lock" >&2; exit 1)
 
 # Bookworm's glibc is new enough for the Isaac Sim wheels. The libraries are what those wheels load;
@@ -91,23 +90,33 @@ RUN python3 -m venv "${VIRTUAL_ENV}" \
     && python -c "from importlib.metadata import version; assert version('isaacsim')"
 
 # Isaac Lab at the commit in versions.lock. No _isaac_sim link: that path is the NGC binary layout.
+# This Lab pin asks for aiohttp>=3.14.3, which is newer than the copy Isaac Sim 6.1 ships. Upgrading it
+# deletes that copy and breaks the extensions that share it, so keep the version already installed.
 RUN git init "${ISAACLAB_PATH}" \
     && git -C "${ISAACLAB_PATH}" remote add origin "${ISAACLAB_REPO}" \
     && git -C "${ISAACLAB_PATH}" fetch --depth 1 origin "${ISAACLAB_COMMIT}" \
     && git -C "${ISAACLAB_PATH}" checkout --quiet FETCH_HEAD \
     && cd "${ISAACLAB_PATH}" \
+    && aiohttp_ver="$(pip show aiohttp 2>/dev/null | awk '/^Version:/{print $2; exit}')" \
+    && if [ -n "${aiohttp_ver}" ]; then \
+         sed -i "s/aiohttp>=3.14.3/aiohttp==${aiohttp_ver}/" pyproject.toml; \
+       fi \
     && ./isaaclab.sh --install
 
 # Build backends for the pinned sources that are installed at start without network or build isolation.
 RUN "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir --upgrade pip \
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir setuptools wheel hatchling msgpack
 
-# Dependencies of isaac-eval (and of `nepher`, which it uses to read the benchmark bundle) at the locked commit.
-# Only the dependencies stay: the run uses /src/eval.
-RUN git clone "${EVAL_REPO_URL}" /opt/unidroid/eval-deps \
-    && git -C /opt/unidroid/eval-deps checkout --quiet "${EVAL_REPO_COMMIT}" \
+# Dependencies of isaac-eval, including nepher, which reads the benchmark bundle. An empty
+# EVAL_REPO_COMMIT clones the default branch. Only the dependencies stay: the run uses /src/eval.
+RUN test -n "${EVAL_REPO_URL}" || (echo "set EVAL_REPO_URL in versions.lock" >&2; exit 1) \
+    && git clone "${EVAL_REPO_URL}" /opt/unidroid/eval-deps \
+    && if [ -n "${EVAL_REPO_COMMIT}" ]; then \
+         git -C /opt/unidroid/eval-deps checkout --quiet "${EVAL_REPO_COMMIT}"; \
+       fi \
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir /opt/unidroid/eval-deps \
-    && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip uninstall -y isaac-eval \
+    && name="$("${VIRTUAL_ENV}/bin/python" -c 'import tomllib; print(tomllib.load(open("/opt/unidroid/eval-deps/pyproject.toml","rb"))["project"]["name"])')" \
+    && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip uninstall -y "${name}" \
     && rm -rf /opt/unidroid/eval-deps
 
 # Writable places Kit uses when the container runs without the NGC image's /isaac-sim tree.

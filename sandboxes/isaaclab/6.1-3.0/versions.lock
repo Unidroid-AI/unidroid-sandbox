@@ -18,6 +18,6 @@ ISAACLAB_REPO=https://github.com/isaac-sim/IsaacLab.git
 ISAACLAB_REF=release/3.0.0
 ISAACLAB_COMMIT=44044b0963001962abe5701133427e37b003fffe
 EVAL_REPO_URL=https://github.com/Unidroid-AI/isaac-eval.git
-# isaac-eval commit whose dependencies are installed into the image. The package itself is
-# removed; the validator mounts the pinned checkout at run time. Required before publish.
+# Commit whose dependencies are installed into the image. The package itself is removed;
+# the validator mounts the pinned checkout at run time. Empty clones the default branch.
 EVAL_REPO_COMMIT=
