@@ -32,13 +32,13 @@ sandboxes/<engine>/<version>/
 
 A new version is a new directory. A new engine is a new directory under `sandboxes/` with the same three files. The publish workflow finds them; the image name is `sandbox-` plus the engine directory name.
 
-`versions.lock` is the input of that version. `EVAL_REPO_COMMIT`, when set, is the commit whose dependencies are installed and then uninstalled. An empty value clones that repository's default branch. The validator's `pins.repos` still selects the code that runs. Isaac Lab `6.1-3.0` installs Isaac Sim with pip from `pypi.nvidia.com`, so the build does not use an NGC API key. A sandbox that still pulls from `nvcr.io` sets `NEEDS_NGC=1` and then needs the `NGC_API_KEY` secret.
+`versions.lock` is the input of that version. `EVAL_REPO_COMMIT`, when set, is the commit whose dependencies are installed and then uninstalled. An empty value clones that repository's default branch. The validator's `pins.repos` still selects the code that runs. Isaac Lab `6.1-3.0` uses the Isaac Sim 6.1.0 binary from `nvcr.io`. It sets `NEEDS_NGC=1`, so the build needs the `NGC_API_KEY` secret. The public `isaacsim` pip wheel is not the simulator in this image.
 
 ## Publish
 
 `.github/workflows/publish.yml` runs on a version tag (`v1.2.3`) or when started by hand. The hand start takes one sandbox, such as `mujoco/4.0.0`; an empty value builds every directory.
 
-Isaac Lab installs the public Isaac Sim pip package, so it does not need `NGC_API_KEY`. It does need a runner with enough disk. Set the repository variable `SANDBOX_RUNNER` when the default hosted runner is too small. MuJoCo does not install Isaac Sim.
+Isaac Lab pulls `nvcr.io/nvidia/isaac-sim:6.1.0`, so the repository secret `NGC_API_KEY` has to be set before publish. It also needs a runner with enough disk. Set the repository variable `SANDBOX_RUNNER` when the default hosted runner is too small. MuJoCo does not install Isaac Sim.
 
 The log ends with the line to put in the validator config:
 

@@ -4,18 +4,16 @@
 # built from this directory. Another version of Isaac Lab is a sibling directory. Change a pin
 # here, publish, then put the new digest in the validator config.
 #
-# Isaac Sim is the public pip package on pypi.nvidia.com. That index does not use an NGC key.
-# The image does not install Mesa libGL or libvulkan; the NVIDIA driver mounted by
-# NVIDIA_DRIVER_CAPABILITIES=all is the only graphics stack.
+# The simulator is nvcr.io/nvidia/isaac-sim:6.1.0. The public isaacsim pip wheel steps physics
+# on driver 580, but its RTX cameras do not match this binary, so the same policy scores about
+# 0 in the wheel and about 0.47 here. NEEDS_NGC=1 makes publish log in to nvcr.io. The secret
+# is NGC_API_KEY. Do not pip-install isaacsim on top of this binary.
 #
 # ISAACLAB_COMMIT is release/3.0.0 as of 2026-11-09 (the branch the old Dockerfile cloned).
 # The branch moves; this commit does not. v3.0.0 is e3f7d9ff1f5d7f8280de3ece9000b7117f66bcf4.
 
-BASE_IMAGE=python:3.12-bookworm
-ISAACSIM_SPEC=isaacsim[all,extscache]==6.1.0.0
-TORCH_VERSION=2.11.0
-TORCHVISION_VERSION=0.26.0
-TORCH_INDEX=https://download.pytorch.org/whl/cu130
+BASE_IMAGE=nvcr.io/nvidia/isaac-sim:6.1.0
+NEEDS_NGC=1
 ISAACLAB_REPO=https://github.com/isaac-sim/IsaacLab.git
 ISAACLAB_REF=release/3.0.0
 ISAACLAB_COMMIT=44044b0963001962abe5701133427e37b003fffe
