@@ -2,19 +2,14 @@
 
 The evaluation sandbox images. Each engine and version is its own directory. The image does not contain the evaluator that runs: the validator mounts that checkout, the task package, and brain-comm, read-only, and the image's entrypoint installs the last two offline.
 
-Validators pull a published digest. They do not build these Dockerfiles.
+Validators pull a published digest. They do not build these Dockerfiles. The digest is not in the validator's config: each challenge carries it as its `sandbox_image`, next to the task, eval and brain-comm commits, so a new challenge or a new image version needs no validator change.
 
-```yaml
-sandbox:
-  image: ghcr.io/unidroid-ai/sandbox-isaaclab@sha256:<digest of sandboxes/isaaclab/6.1-3.0>
+```
+ghcr.io/unidroid-ai/sandbox-isaaclab@sha256:<digest of sandboxes/isaaclab/6.1-3.0>
+ghcr.io/unidroid-ai/sandbox-mujoco@sha256:<digest of sandboxes/mujoco/4.0.0>
 ```
 
-```yaml
-sandbox:
-  image: ghcr.io/unidroid-ai/sandbox-mujoco@sha256:<digest of sandboxes/mujoco/4.0.0>
-```
-
-A tag is not a pin. The digest selects the engine and the version. Two versions of one engine are two digests of `sandbox-<engine>`.
+A tag is not a pin. The digest selects the engine and the version. Two versions of one engine are two digests of `sandbox-<engine>`. The validator only checks the digest against its allowlist pattern (`sandbox.image_pattern`), pulls it on demand and verifies it.
 
 ## Layout
 
@@ -32,7 +27,7 @@ sandboxes/<engine>/<version>/
 
 A new version is a new directory. A new engine is a new directory under `sandboxes/` with the same three files. The publish workflow finds them; the image name is `sandbox-` plus the engine directory name.
 
-`versions.lock` is the input of that version. `EVAL_REPO_COMMIT`, when set, is the commit whose dependencies are installed and then uninstalled. An empty value clones that repository's default branch. The validator's `pins.repos` still selects the code that runs. Isaac Lab `6.1-3.0` uses the Isaac Sim 6.1.0 binary from `nvcr.io`. It sets `NEEDS_NGC=1`, so the build needs the `NGC_API_KEY` secret. The public `isaacsim` pip wheel is not the simulator in this image.
+`versions.lock` is the input of that version. `EVAL_REPO_COMMIT`, when set, is the commit whose dependencies are installed and then uninstalled. The publish workflow never builds from a moving branch: an empty value is resolved to the default branch's head SHA before the build, so the `ai.unidroid.eval-deps.commit` label always records a real commit (pin it here to make the build reproducible). The challenge's `eval_commit` still selects the code that runs; when the eval repository changes its dependencies, publish a new version of the image and point the challenge at its new digest. Isaac Lab `6.1-3.0` uses the Isaac Sim 6.1.0 binary from `nvcr.io`. It sets `NEEDS_NGC=1`, so the build needs the `NGC_API_KEY` secret. The public `isaacsim` pip wheel is not the simulator in this image.
 
 ## Publish
 
@@ -40,7 +35,7 @@ A new version is a new directory. A new engine is a new directory under `sandbox
 
 Isaac Lab pulls `nvcr.io/nvidia/isaac-sim:6.1.0`, so the repository secret `NGC_API_KEY` has to be set before publish. It also needs a runner with enough disk. Set the repository variable `SANDBOX_RUNNER` when the default hosted runner is too small. MuJoCo does not install Isaac Sim.
 
-The log ends with the line to put in the validator config:
+The log ends with the line to put in the challenge as `sandbox_image`:
 
 ```
 ghcr.io/unidroid-ai/sandbox-isaaclab@sha256:<64 hex chars>
@@ -52,9 +47,9 @@ Every entrypoint honors the same contract. The validator starts the container wi
 
 | Mount | What it is |
 |---|---|
-| `/src/eval` | pinned eval package, read-only, run from here |
-| `/src/task` | pinned task package, read-only |
-| `/src/brain-comm` | pinned brain-comm, read-only |
+| `/src/eval` | the challenge's pinned eval package, read-only, run from here |
+| `/src/task` | the challenge's pinned task package, read-only |
+| `/src/brain-comm` | the challenge's pinned brain-comm, read-only |
 | `/benchmark/<id>` | the private benchmark, read-only |
 | `/config/eval.yaml` | the challenge eval config, read-only |
 | `/out` | `evaluation_result.json` and `sandbox_status.json` |

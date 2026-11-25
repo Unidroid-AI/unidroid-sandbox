@@ -3,9 +3,9 @@
 # It runs the private benchmark and no miner code. It starts with no network, so everything it needs is in this
 # image or in the read-only mounts the validator provides at run time:
 #
-#   /src/eval         the eval package at the commit pinned by the validator
-#   /src/task         the task package at its pinned commit
-#   /src/brain-comm   brain-comm at the validator's pin
+#   /src/eval         the eval package at the commit the challenge pins
+#   /src/task         the task package at the commit the challenge pins
+#   /src/brain-comm   brain-comm at the commit the challenge pins
 #   /benchmark/<id>   the extracted private benchmark
 #   /config           eval.yaml
 #   /out              evaluation_result.json and sandbox_status.json
@@ -59,6 +59,7 @@ RUN if [ -n "${EVAL_REPO_COMMIT}" ]; then \
       test -n "${EVAL_REPO_URL}" || (echo "EVAL_REPO_URL is required when EVAL_REPO_COMMIT is set" >&2; exit 1); \
       git clone "${EVAL_REPO_URL}" /opt/unidroid/eval-deps \
       && git -C /opt/unidroid/eval-deps checkout --quiet "${EVAL_REPO_COMMIT}" \
+      && git -C /opt/unidroid/eval-deps rev-parse HEAD > /opt/unidroid/eval-deps.commit \
       && python3 -m pip install --no-cache-dir /opt/unidroid/eval-deps \
       && name=$(python3 -c 'import tomllib; print(tomllib.load(open("/opt/unidroid/eval-deps/pyproject.toml","rb"))["project"]["name"])') \
       && python3 -m pip uninstall -y "${name}" \

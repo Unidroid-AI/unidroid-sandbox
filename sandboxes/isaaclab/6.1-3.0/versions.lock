@@ -2,7 +2,7 @@
 #
 # Validators do not build this image. They pull sandbox-isaaclab@sha256:<digest> of a release
 # built from this directory. Another version of Isaac Lab is a sibling directory. Change a pin
-# here, publish, then put the new digest in the validator config.
+# here, publish, then put the new digest in the challenge's sandbox_image.
 #
 # The simulator is nvcr.io/nvidia/isaac-sim:6.1.0. The public isaacsim pip wheel steps physics
 # on driver 580, but its RTX cameras do not match this binary, so the same policy scores about
@@ -19,5 +19,6 @@ ISAACLAB_REF=release/3.0.0
 ISAACLAB_COMMIT=44044b0963001962abe5701133427e37b003fffe
 EVAL_REPO_URL=https://github.com/Unidroid-AI/isaac-eval.git
 # Commit whose dependencies are installed into the image. The package itself is removed;
-# the validator mounts the pinned checkout at run time. Empty clones the default branch.
+# the validator mounts the challenge's pinned checkout at run time. Empty is resolved to the default
+# branch head when published, so prefer a real commit.
 EVAL_REPO_COMMIT=

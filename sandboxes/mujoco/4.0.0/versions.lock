@@ -1,7 +1,7 @@
 # Frozen inputs of ghcr.io/unidroid-ai/sandbox-mujoco at this version.
 #
 # Another MuJoCo version is a sibling directory and is published as its own digest of the
-# same image name. Validators pin the digest.
+# same image name. A challenge pins the digest.
 
 BASE_IMAGE=python:3.12-slim-bookworm
 MUJOCO_VERSION=4.0.0

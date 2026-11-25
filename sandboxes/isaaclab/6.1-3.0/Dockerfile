@@ -3,9 +3,9 @@
 # It runs the private benchmark and no miner code (the miner's brain runs in a separate container). It starts with
 # no network, so everything it needs is in this image or in the read-only mounts the validator provides at run time:
 #
-#   /src/eval         isaac-eval at the commit pinned in the validator config   (run from here, never from this image)
-#   /src/task         the task package at its pinned commit                     (installed at start, offline)
-#   /src/brain-comm   brain-comm at the validator's pin                         (installed at start, offline)
+#   /src/eval         isaac-eval at the commit the challenge pins               (run from here, never from this image)
+#   /src/task         the task package at the commit the challenge pins         (installed at start, offline)
+#   /src/brain-comm   brain-comm at the commit the challenge pins               (installed at start, offline)
 #   /benchmark/<id>   the extracted private benchmark
 #   /config           eval.yaml, the challenge's eval config, unchanged
 #   /out              evaluation_result.json and sandbox_status.json are written here
@@ -104,6 +104,7 @@ RUN test -n "${EVAL_REPO_URL}" || (echo "set EVAL_REPO_URL in versions.lock" >&2
     && if [ -n "${EVAL_REPO_COMMIT}" ]; then \
          git -C /opt/unidroid/eval-deps checkout --quiet "${EVAL_REPO_COMMIT}"; \
        fi \
+    && git -C /opt/unidroid/eval-deps rev-parse HEAD > /opt/unidroid/eval-deps.commit \
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir /opt/unidroid/eval-deps \
     && name="$("${ISAACLAB_PATH}/_isaac_sim/python.sh" -c 'import tomllib; print(tomllib.load(open("/opt/unidroid/eval-deps/pyproject.toml","rb"))["project"]["name"])')" \
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip uninstall -y "${name}" \

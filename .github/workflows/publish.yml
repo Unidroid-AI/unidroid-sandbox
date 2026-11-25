@@ -86,6 +86,8 @@ jobs:
           cd "${SANDBOX_PATH}"
           needs_ngc=0
           args=()
+          eval_url=""
+          eval_commit=""
           while IFS= read -r line || [ -n "${line}" ]; do
             case "${line}" in
               ''|\#*) continue ;;
@@ -96,10 +98,29 @@ jobs:
               [ "${value}" = "1" ] && needs_ngc=1
               continue
             fi
+            # The eval commit is added below once it is a real SHA, so the label never records an empty value.
+            if [ "${name}" = "EVAL_REPO_COMMIT" ]; then
+              eval_commit="${value}"
+              continue
+            fi
+            if [ "${name}" = "EVAL_REPO_URL" ]; then
+              eval_url="${value}"
+            fi
             if grep -qE "^ARG ${name}(=|[[:space:]]|$)" Dockerfile; then
               args+=(--build-arg "${name}=${value}")
             fi
           done < versions.lock
+          if [ -n "${eval_url}" ]; then
+            if [ -z "${eval_commit}" ]; then
+              eval_commit=$(git ls-remote "${eval_url}" HEAD | cut -f1)
+              echo "EVAL_REPO_COMMIT is empty in versions.lock; using the default branch head ${eval_commit}"
+            fi
+            if ! printf '%s' "${eval_commit}" | grep -qE '^[0-9a-f]{40}$'; then
+              echo "cannot resolve EVAL_REPO_COMMIT to a full commit SHA" >&2
+              exit 1
+            fi
+            args+=(--build-arg "EVAL_REPO_COMMIT=${eval_commit}")
+          fi
           if [ "${needs_ngc}" = "1" ]; then
             if [ -z "${NGC_API_KEY}" ]; then
               echo "NGC_API_KEY is not set; this sandbox pulls from nvcr.io" >&2
@@ -112,5 +133,5 @@ jobs:
           docker push "${image}:${VERSION}"
           docker push "${image}:${GITHUB_SHA}"
           digest=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "${image}:${VERSION}")
-          echo "Put this in the validator config as sandbox.image:"
+          echo "Put this in the challenge as sandbox_image (the validator config does not carry it):"
           echo "${image}@${digest}"
