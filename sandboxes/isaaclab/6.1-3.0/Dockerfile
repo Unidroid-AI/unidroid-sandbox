@@ -90,12 +90,13 @@ RUN git init "${ISAACLAB_PATH}" \
     && test -e /isaac-sim/python.sh
 
 # Build backends for the pinned sources that are installed at start without network or build isolation.
-# brain-comm imports msgpack, and this binary's Python does not ship it. The entrypoint installs
-# brain-comm with --no-deps, so the dependency has to already be here.
+# brain-comm imports msgpack, and task packages import pyyaml/moviepy(<2); the entrypoint installs
+# brain-comm and task with --no-deps, so runtime dependencies must already be present here.
 RUN "${ISAACLAB_PATH}/isaaclab.sh" -p -m ensurepip --upgrade \
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir --upgrade pip \
-    && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir setuptools wheel hatchling msgpack \
-    && "${ISAACLAB_PATH}/isaaclab.sh" -p -c "import msgpack"
+    && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir \
+        setuptools wheel hatchling msgpack "pyyaml>=6.0" "moviepy>=1.0.3,<2" \
+    && "${ISAACLAB_PATH}/isaaclab.sh" -p -c "import msgpack, yaml, moviepy.editor"
 
 # Dependencies of isaac-eval, including nepher, which reads the benchmark bundle. An empty
 # EVAL_REPO_COMMIT clones the default branch. Only the dependencies stay: the run uses /src/eval.
@@ -108,6 +109,7 @@ RUN test -n "${EVAL_REPO_URL}" || (echo "set EVAL_REPO_URL in versions.lock" >&2
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir /opt/unidroid/eval-deps \
     && name="$("${ISAACLAB_PATH}/_isaac_sim/python.sh" -c 'import tomllib; print(tomllib.load(open("/opt/unidroid/eval-deps/pyproject.toml","rb"))["project"]["name"])')" \
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip uninstall -y "${name}" \
+    && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip freeze > /opt/unidroid/eval-deps.lock \
     && rm -rf /opt/unidroid/eval-deps
 
 # Kit writes caches next to the binary and under the usual XDG paths. The container runs without

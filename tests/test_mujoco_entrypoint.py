@@ -150,3 +150,10 @@ def test_the_exit_code_is_never_one_the_validator_reads_as_docker_failing(box):
             leftover.unlink() if leftover.is_file() else shutil.rmtree(leftover)
         codes.add(box.run(**env).returncode)
     assert codes.isdisjoint({125, 126, 127}), codes
+
+
+def test_pre_episode_config_exit_5_is_reported_as_stage_config(box):
+    done = box.run(FAKE_NO_RESULT="1", FAKE_EVAL_EXIT="5")
+    assert done.returncode == 5 and box.result is None
+    assert box.status() == {"stage": "config", "code": 5, "exit_code": 5}
+

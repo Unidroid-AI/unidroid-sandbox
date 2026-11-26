@@ -71,6 +71,11 @@ if [ -f "${RESULT}" ]; then
     echo "[sandbox] done (evaluation exit ${EVAL_EXIT}); result written"
     exit 0
 fi
+if [ "${EVAL_EXIT}" -eq 5 ]; then
+    status config 5 "${EVAL_EXIT}"
+    echo "[sandbox] evaluation config or benchmark bundle rejected before episodes ran (exit 5)" >&2
+    exit 5
+fi
 status eval 0 "${EVAL_EXIT}"
 echo "[sandbox] the evaluation ended without a result (exit ${EVAL_EXIT})" >&2
 exit 1

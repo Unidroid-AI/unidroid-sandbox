@@ -5,7 +5,8 @@
 # install: never the miner's fault) from "the evaluation ran and produced nothing" (stage eval).
 #
 # Exit status: 0 when /out/evaluation_result.json exists, whatever Isaac did on shutdown; otherwise 3 (no GPU),
-# 4 (install failed) or 1. Never 125-127: the validator reads those as "docker could not run the container".
+# 4 (install failed), 5 (config/bundle mismatch before workers ran) or 1. Never 125-127: the validator reads those
+# as "docker could not run the container".
 #
 # Environment (set by the validator):
 #   UNIDROID_BENCHMARK_ID   id of the benchmark mounted at /benchmark/<id>
@@ -86,6 +87,11 @@ if [ -f "${RESULT}" ]; then
     status eval 0 "${EVAL_EXIT}"
     echo "[sandbox] done (evaluation exit ${EVAL_EXIT}); result written"
     exit 0
+fi
+if [ "${EVAL_EXIT}" -eq 5 ]; then
+    status config 5 "${EVAL_EXIT}"
+    echo "[sandbox] evaluation config or benchmark bundle rejected before episodes ran (exit 5)" >&2
+    exit 5
 fi
 status eval 0 "${EVAL_EXIT}"
 echo "[sandbox] the evaluation ended without a result (exit ${EVAL_EXIT})" >&2

@@ -227,4 +227,11 @@ def test_the_exit_code_is_never_one_the_validator_reads_as_docker_failing(box):
 def test_the_status_file_is_valid_json_the_validator_can_read(box):
     box.run(FAKE_NO_RESULT="1", FAKE_EVAL_EXIT="3")
     data = json.loads((box.root / "out" / "sandbox_status.json").read_text())
-    assert isinstance(data["exit_code"], int) and data["stage"] in {"gpu", "install", "eval"}
+    assert isinstance(data["exit_code"], int) and data["stage"] in {"gpu", "install", "config", "eval"}
+
+
+def test_pre_episode_config_exit_5_is_reported_as_stage_config(box):
+    done = box.run(FAKE_NO_RESULT="1", FAKE_EVAL_EXIT="5")
+    assert done.returncode == 5 and box.result is None
+    assert box.status() == {"stage": "config", "code": 5, "exit_code": 5}
+
