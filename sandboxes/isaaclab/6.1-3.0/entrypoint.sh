@@ -1,5 +1,5 @@
 #!/bin/bash
-# Unidroid sandbox entrypoint: install the pinned sources offline, run isaac-eval against the brain, report.
+# Unidroid sandbox entrypoint: install the pinned task package offline, run isaac-eval against the brain, report.
 #
 # It writes /out/sandbox_status.json so the validator can tell "this host could not run the sandbox" (stage gpu or
 # install: never the miner's fault) from "the evaluation ran and produced nothing" (stage eval).
@@ -49,17 +49,15 @@ nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 [ -f /src/eval/isaac_eval/scripts/evaluate.py ] || stop install 4 "isaac-eval is not mounted at /src/eval"
 [ -f /config/eval.yaml ] || stop install 4 "the eval config is not mounted at /config/eval.yaml"
 [ -f "/benchmark/${BENCHMARK_ID}/manifest.yaml" ] || stop install 4 "the benchmark is not mounted at /benchmark/${BENCHMARK_ID}"
-[ -d /src/task ] && [ -d /src/brain-comm ] || stop install 4 "the pinned task package or brain-comm is not mounted"
+[ -d /src/task ] || stop install 4 "the pinned task package is not mounted at /src/task"
 
-# ---- 3. Install the pinned task package and brain-comm from copies: no network, no dependencies, no build
-#         isolation. The mounts are read-only and pip builds in the source tree, so it works on copies.
+# ---- 3. Install the pinned task package from a copy: no network, no dependencies, no build isolation. The mount is
+#         read-only and pip builds in the source tree, so it works on a copy. brain-comm is part of the image.
 rm -rf "${BUILD:?}"/*
-cp -r /src/brain-comm "${BUILD}/brain-comm" && cp -r /src/task "${BUILD}/task" || stop install 4 "could not copy the pinned sources"
-for package in brain-comm task; do
-    "${PY[@]}" -m pip install --no-deps --no-build-isolation --no-index --no-cache-dir --quiet "${BUILD}/${package}" \
-        || stop install 4 "installing the pinned ${package} package failed"
-done
-"${PY[@]}" -c "import brain_comm" > /dev/null 2>&1 || stop install 4 "brain_comm cannot be imported after installing it"
+cp -r /src/task "${BUILD}/task" || stop install 4 "could not copy the pinned task package"
+"${PY[@]}" -m pip install --no-deps --no-build-isolation --no-index --no-cache-dir --quiet "${BUILD}/task" \
+    || stop install 4 "installing the pinned task package failed"
+"${PY[@]}" -c "import brain_comm" > /dev/null 2>&1 || stop install 4 "brain_comm is missing from the sandbox image"
 
 # ---- 4. Evaluate. isaac-eval runs from the pinned mount. In `runtime: brain` it starts one Isaac process per GPU
 #         and connects to the brain sockets named by the config.

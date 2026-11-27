@@ -17,6 +17,11 @@ NEEDS_NGC=1
 ISAACLAB_REPO=https://github.com/isaac-sim/IsaacLab.git
 ISAACLAB_REF=release/3.0.0
 ISAACLAB_COMMIT=44044b0963001962abe5701133427e37b003fffe
+# brain-comm is installed in the image. Its protocol must equal the one in the brain images the challenge uses;
+# the publish workflow resolves this tag (or a full commit SHA) to a commit, reads PROTOCOL_VERSION there and
+# records both as image labels. Use the same ref as brain-images/brain-comm.lock.
+BRAIN_COMM_REPO_URL=https://github.com/Unidroid-AI/brain-comm.git
+BRAIN_COMM_REF=v1.0.0
 EVAL_REPO_URL=https://github.com/Unidroid-AI/isaac-eval.git
 # Commit whose dependencies are installed into the image. The package itself is removed;
 # the validator mounts the challenge's pinned checkout at run time. Empty is resolved to the default

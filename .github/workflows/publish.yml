@@ -88,6 +88,9 @@ jobs:
           args=()
           eval_url=""
           eval_commit=""
+          comm_url=""
+          comm_ref=""
+          comm_commit=""
           while IFS= read -r line || [ -n "${line}" ]; do
             case "${line}" in
               ''|\#*) continue ;;
@@ -106,6 +109,14 @@ jobs:
             if [ "${name}" = "EVAL_REPO_URL" ]; then
               eval_url="${value}"
             fi
+            # Same for brain-comm: the commit and its protocol are resolved below, then recorded as labels.
+            if [ "${name}" = "BRAIN_COMM_REF" ]; then
+              comm_ref="${value}"
+              continue
+            fi
+            if [ "${name}" = "BRAIN_COMM_REPO_URL" ]; then
+              comm_url="${value}"
+            fi
             if grep -qE "^ARG ${name}(=|[[:space:]]|$)" Dockerfile; then
               args+=(--build-arg "${name}=${value}")
             fi
@@ -121,6 +132,36 @@ jobs:
             fi
             args+=(--build-arg "EVAL_REPO_COMMIT=${eval_commit}")
           fi
+          if [ -n "${comm_url}" ]; then
+            if [ -z "${comm_ref}" ]; then
+              echo "BRAIN_COMM_REF is not set in versions.lock" >&2
+              exit 1
+            fi
+            if printf '%s' "${comm_ref}" | grep -qE '^[0-9a-f]{40}$'; then
+              comm_commit="${comm_ref}"
+            else
+              # An annotated tag points at a tag object; its peeled entry (^{}) is the commit.
+              comm_commit=$(git ls-remote "${comm_url}" "refs/tags/${comm_ref}^{}" | cut -f1 | head -n1)
+              [ -n "${comm_commit}" ] || comm_commit=$(git ls-remote "${comm_url}" "refs/tags/${comm_ref}" | cut -f1 | head -n1)
+            fi
+            if ! printf '%s' "${comm_commit}" | grep -qE '^[0-9a-f]{40}$'; then
+              echo "cannot resolve BRAIN_COMM_REF '${comm_ref}' to a full commit SHA" >&2
+              exit 1
+            fi
+            # The protocol label is read from the source at that commit; the Dockerfile fails if the package differs.
+            probe=$(mktemp -d)
+            git -C "${probe}" init --quiet
+            git -C "${probe}" fetch --quiet --depth 1 "${comm_url}" "${comm_commit}"
+            comm_protocol=$(git -C "${probe}" show FETCH_HEAD:brain_comm/protocol.py \
+              | sed -n 's/^PROTOCOL_VERSION = "\(.*\)"$/\1/p')
+            rm -rf "${probe}"
+            if [ -z "${comm_protocol}" ]; then
+              echo "brain_comm/protocol.py at ${comm_commit} has no PROTOCOL_VERSION" >&2
+              exit 1
+            fi
+            echo "brain-comm ${comm_commit}, protocol ${comm_protocol}"
+            args+=(--build-arg "BRAIN_COMM_COMMIT=${comm_commit}" --build-arg "BRAIN_COMM_PROTOCOL=${comm_protocol}")
+          fi
           if [ "${needs_ngc}" = "1" ]; then
             if [ -z "${NGC_API_KEY}" ]; then
               echo "NGC_API_KEY is not set; this sandbox pulls from nvcr.io" >&2
@@ -133,5 +174,6 @@ jobs:
           docker push "${image}:${VERSION}"
           docker push "${image}:${GITHUB_SHA}"
           digest=$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "${image}:${VERSION}")
-          echo "Put this in the challenge as sandbox_image (the validator config does not carry it):"
+          echo "Put this in the challenge as sandbox_image (the validator config does not carry it)."
+          echo "Its brain-comm protocol is ${comm_protocol:-unknown}; the challenge's brain image must carry the same one:"
           echo "${image}@${digest}"

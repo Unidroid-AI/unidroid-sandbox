@@ -5,6 +5,11 @@
 
 BASE_IMAGE=python:3.12-slim-bookworm
 MUJOCO_VERSION=4.0.0
+# brain-comm is installed in the image. Its protocol must equal the one in the brain images the challenge uses;
+# the publish workflow resolves this tag (or a full commit SHA) to a commit, reads PROTOCOL_VERSION there and
+# records both as image labels. Use the same ref as brain-images/brain-comm.lock.
+BRAIN_COMM_REPO_URL=https://github.com/Unidroid-AI/brain-comm.git
+BRAIN_COMM_REF=v1.0.0
 # When set, that commit's dependencies are installed and the package is removed. The
 # validator still mounts the pinned checkout. Leave empty to publish MuJoCo alone.
 EVAL_REPO_URL=

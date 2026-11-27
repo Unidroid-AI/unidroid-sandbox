@@ -5,16 +5,20 @@
 #
 #   /src/eval         the eval package at the commit the challenge pins
 #   /src/task         the task package at the commit the challenge pins
-#   /src/brain-comm   brain-comm at the commit the challenge pins
 #   /benchmark/<id>   the extracted private benchmark
 #   /config           eval.yaml
 #   /out              evaluation_result.json and sandbox_status.json
+#
+# brain-comm is part of this image, at the commit in versions.lock, and labelled with its commit and protocol.
+# The challenge pins no brain-comm: pinning this image's digest pins its client.
 #
 # Build from this directory:
 #   set -a && . ./versions.lock && set +a
 #   docker build -t ghcr.io/unidroid-ai/sandbox-mujoco:4.0.0 \
 #     --build-arg BASE_IMAGE --build-arg MUJOCO_VERSION \
+#     --build-arg BRAIN_COMM_REPO_URL --build-arg BRAIN_COMM_COMMIT --build-arg BRAIN_COMM_PROTOCOL \
 #     --build-arg EVAL_REPO_URL --build-arg EVAL_REPO_COMMIT .
+# BRAIN_COMM_PROTOCOL is PROTOCOL_VERSION at BRAIN_COMM_COMMIT; the build fails when the installed package differs.
 
 ARG BASE_IMAGE=python:3.12-slim-bookworm
 FROM ${BASE_IMAGE}
@@ -22,6 +26,9 @@ FROM ${BASE_IMAGE}
 ARG MUJOCO_VERSION=4.0.0
 ARG EVAL_REPO_URL=
 ARG EVAL_REPO_COMMIT=
+ARG BRAIN_COMM_REPO_URL=https://github.com/Unidroid-AI/brain-comm.git
+ARG BRAIN_COMM_COMMIT
+ARG BRAIN_COMM_PROTOCOL
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -32,7 +39,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 LABEL org.opencontainers.image.source="https://github.com/Unidroid-AI/unidroid-sandbox" \
       org.opencontainers.image.title="sandbox-mujoco" \
-      ai.unidroid.sandbox.contract="1" \
+      ai.unidroid.sandbox.contract="2" \
+      ai.unidroid.brain-comm.commit="${BRAIN_COMM_COMMIT}" \
+      ai.unidroid.brain-comm.protocol="${BRAIN_COMM_PROTOCOL}" \
       ai.unidroid.sandbox.engine="mujoco" \
       ai.unidroid.sandbox.version="4.0.0" \
       ai.unidroid.mujoco.version="${MUJOCO_VERSION}" \
@@ -52,6 +61,19 @@ RUN mkdir -p /var/lib/apt/lists/partial \
 
 RUN python3 -m pip install --no-cache-dir --upgrade pip \
     && python3 -m pip install --no-cache-dir "mujoco==${MUJOCO_VERSION}" setuptools wheel hatchling
+
+# brain-comm at the commit in versions.lock, with its dependencies (msgpack, numpy). The build stops when the
+# package reports a different protocol than the label this image carries.
+RUN test -n "${BRAIN_COMM_COMMIT}" && test -n "${BRAIN_COMM_PROTOCOL}" \
+        || (echo "build with --build-arg BRAIN_COMM_COMMIT=<commit> --build-arg BRAIN_COMM_PROTOCOL=<PROTOCOL_VERSION> (see versions.lock)" >&2; exit 1) \
+    && git init /opt/unidroid/brain-comm \
+    && git -C /opt/unidroid/brain-comm remote add origin "${BRAIN_COMM_REPO_URL}" \
+    && git -C /opt/unidroid/brain-comm fetch --depth 1 origin "${BRAIN_COMM_COMMIT}" \
+    && git -C /opt/unidroid/brain-comm checkout --quiet FETCH_HEAD \
+    && test "$(git -C /opt/unidroid/brain-comm rev-parse HEAD)" = "${BRAIN_COMM_COMMIT}" \
+    && python3 -m pip install --no-cache-dir /opt/unidroid/brain-comm \
+    && rm -rf /opt/unidroid/brain-comm \
+    && test "$(python3 -c 'import brain_comm; print(brain_comm.PROTOCOL_VERSION)')" = "${BRAIN_COMM_PROTOCOL}"
 
 # Optional: dependencies of the eval package named in versions.lock. The package itself is removed, so the
 # mounted checkout is what runs.

@@ -1,6 +1,6 @@
 #!/bin/bash
-# MuJoCo sandbox entrypoint. Same contract as the Isaac Lab sandbox: the validator mounts the pinned sources and
-# the benchmark, and this script reports through /out/sandbox_status.json.
+# MuJoCo sandbox entrypoint. Same contract as the Isaac Lab sandbox: the validator mounts the pinned eval and task
+# sources and the benchmark, and this script reports through /out/sandbox_status.json.
 #
 # Exit status: 0 when /out/evaluation_result.json exists; otherwise 4 (install or a mount failed) or 1. Never
 # 125-127. Exit 3 is reserved for a sandbox that requires a GPU and cannot see one; MuJoCo does not.
@@ -42,15 +42,14 @@ echo "[sandbox] benchmark ${BENCHMARK_ID}, timeout ${EVAL_TIMEOUT}s"
 [ -f "${EVAL_SCRIPT}" ] || stop install 4 "the eval script is not mounted at ${EVAL_SCRIPT}"
 [ -f /config/eval.yaml ] || stop install 4 "the eval config is not mounted at /config/eval.yaml"
 [ -f "/benchmark/${BENCHMARK_ID}/manifest.yaml" ] || stop install 4 "the benchmark is not mounted at /benchmark/${BENCHMARK_ID}"
-[ -d /src/task ] && [ -d /src/brain-comm ] || stop install 4 "the pinned task package or brain-comm is not mounted"
+[ -d /src/task ] || stop install 4 "the pinned task package is not mounted at /src/task"
 
+# The task package is installed from a copy (the mount is read-only); brain-comm is part of the image.
 rm -rf "${BUILD:?}"/*
-cp -r /src/brain-comm "${BUILD}/brain-comm" && cp -r /src/task "${BUILD}/task" || stop install 4 "could not copy the pinned sources"
-for package in brain-comm task; do
-    "${PY[@]}" -m pip install --no-deps --no-build-isolation --no-index --no-cache-dir --quiet "${BUILD}/${package}" \
-        || stop install 4 "installing the pinned ${package} package failed"
-done
-"${PY[@]}" -c "import brain_comm" > /dev/null 2>&1 || stop install 4 "brain_comm cannot be imported after installing it"
+cp -r /src/task "${BUILD}/task" || stop install 4 "could not copy the pinned task package"
+"${PY[@]}" -m pip install --no-deps --no-build-isolation --no-index --no-cache-dir --quiet "${BUILD}/task" \
+    || stop install 4 "installing the pinned task package failed"
+"${PY[@]}" -c "import brain_comm" > /dev/null 2>&1 || stop install 4 "brain_comm is missing from the sandbox image"
 
 export PYTHONPATH="/src/eval${PYTHONPATH:+:${PYTHONPATH}}"
 export ISAAC_EVAL_BUNDLE_DIR="/benchmark/${BENCHMARK_ID}"

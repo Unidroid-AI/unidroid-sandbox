@@ -5,12 +5,15 @@
 #
 #   /src/eval         isaac-eval at the commit the challenge pins               (run from here, never from this image)
 #   /src/task         the task package at the commit the challenge pins         (installed at start, offline)
-#   /src/brain-comm   brain-comm at the commit the challenge pins               (installed at start, offline)
 #   /benchmark/<id>   the extracted private benchmark
 #   /config           eval.yaml, the challenge's eval config, unchanged
 #   /out              evaluation_result.json and sandbox_status.json are written here
 #
-# Pins for Sim, Lab and the dependency set live in versions.lock, not in the validator. This image installs only
+# brain-comm is part of this image, at the commit in versions.lock. The brain images carry their own copy, and both
+# carry the labels ai.unidroid.brain-comm.commit and ai.unidroid.brain-comm.protocol. The challenge pins no
+# brain-comm: pinning this image's digest pins its client.
+#
+# Pins for Sim, Lab, brain-comm and the dependency set live in versions.lock, not in the validator. This image installs only
 # what those sources depend on. The isaac-eval copy below is used to pull in its dependencies and is then removed,
 # so a stale copy can never run.
 #
@@ -23,7 +26,9 @@
 #   set -a && . ./versions.lock && set +a
 #   docker build -t ghcr.io/unidroid-ai/sandbox-isaaclab:6.1-3.0 \
 #     --build-arg BASE_IMAGE --build-arg ISAACLAB_REPO --build-arg ISAACLAB_COMMIT \
+#     --build-arg BRAIN_COMM_REPO_URL --build-arg BRAIN_COMM_COMMIT --build-arg BRAIN_COMM_PROTOCOL \
 #     --build-arg EVAL_REPO_URL --build-arg EVAL_REPO_COMMIT .
+# BRAIN_COMM_PROTOCOL is PROTOCOL_VERSION at BRAIN_COMM_COMMIT; the build fails when the installed package differs.
 
 ARG BASE_IMAGE=nvcr.io/nvidia/isaac-sim:6.1.0
 FROM ${BASE_IMAGE}
@@ -33,6 +38,9 @@ ARG ISAACLAB_REPO=https://github.com/isaac-sim/IsaacLab.git
 ARG ISAACLAB_COMMIT
 ARG EVAL_REPO_URL=https://github.com/Unidroid-AI/isaac-eval.git
 ARG EVAL_REPO_COMMIT
+ARG BRAIN_COMM_REPO_URL=https://github.com/Unidroid-AI/brain-comm.git
+ARG BRAIN_COMM_COMMIT
+ARG BRAIN_COMM_PROTOCOL
 
 # No VIRTUAL_ENV. isaaclab.sh rejects a foreign virtualenv once _isaac_sim is the binary,
 # and the binary's python.sh is the interpreter the entrypoint calls.
@@ -54,7 +62,9 @@ LABEL org.opencontainers.image.source="https://github.com/Unidroid-AI/unidroid-s
       org.opencontainers.image.title="sandbox-isaaclab" \
       ai.unidroid.sandbox.engine="isaaclab" \
       ai.unidroid.sandbox.version="6.1-3.0" \
-      ai.unidroid.sandbox.contract="1" \
+      ai.unidroid.sandbox.contract="2" \
+      ai.unidroid.brain-comm.commit="${BRAIN_COMM_COMMIT}" \
+      ai.unidroid.brain-comm.protocol="${BRAIN_COMM_PROTOCOL}" \
       ai.unidroid.isaacsim.image="${BASE_IMAGE}" \
       ai.unidroid.isaaclab.commit="${ISAACLAB_COMMIT}" \
       ai.unidroid.eval-deps.commit="${EVAL_REPO_COMMIT}"
@@ -89,14 +99,27 @@ RUN git init "${ISAACLAB_PATH}" \
     && ./isaaclab.sh --install \
     && test -e /isaac-sim/python.sh
 
-# Build backends for the pinned sources that are installed at start without network or build isolation.
-# brain-comm imports msgpack, and task packages import pyyaml/moviepy(<2); the entrypoint installs
-# brain-comm and task with --no-deps, so runtime dependencies must already be present here.
+# Build backends for the task package, which is installed at start without network or build isolation.
+# brain-comm imports msgpack and numpy, and task packages import pyyaml/moviepy(<2); both are installed with
+# --no-deps, so runtime dependencies must already be present here (numpy comes with Isaac Sim).
 RUN "${ISAACLAB_PATH}/isaaclab.sh" -p -m ensurepip --upgrade \
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir --upgrade pip \
     && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir \
         setuptools wheel hatchling msgpack "pyyaml>=6.0" "moviepy>=1.0.3,<2" \
-    && "${ISAACLAB_PATH}/isaaclab.sh" -p -c "import msgpack, yaml, moviepy.editor"
+    && "${ISAACLAB_PATH}/isaaclab.sh" -p -c "import msgpack, numpy, yaml, moviepy.editor"
+
+# brain-comm at the commit in versions.lock. --no-deps keeps Isaac Sim's numpy. The build stops when the package
+# reports a different protocol than the label this image will carry.
+RUN test -n "${BRAIN_COMM_COMMIT}" && test -n "${BRAIN_COMM_PROTOCOL}" \
+        || (echo "build with --build-arg BRAIN_COMM_COMMIT=<commit> --build-arg BRAIN_COMM_PROTOCOL=<PROTOCOL_VERSION> (see versions.lock)" >&2; exit 1) \
+    && git init /opt/unidroid/brain-comm \
+    && git -C /opt/unidroid/brain-comm remote add origin "${BRAIN_COMM_REPO_URL}" \
+    && git -C /opt/unidroid/brain-comm fetch --depth 1 origin "${BRAIN_COMM_COMMIT}" \
+    && git -C /opt/unidroid/brain-comm checkout --quiet FETCH_HEAD \
+    && test "$(git -C /opt/unidroid/brain-comm rev-parse HEAD)" = "${BRAIN_COMM_COMMIT}" \
+    && "${ISAACLAB_PATH}/isaaclab.sh" -p -m pip install --no-cache-dir --no-deps /opt/unidroid/brain-comm \
+    && rm -rf /opt/unidroid/brain-comm \
+    && test "$("${ISAACLAB_PATH}/isaaclab.sh" -p -c 'import brain_comm; print(brain_comm.PROTOCOL_VERSION)' | tail -n 1)" = "${BRAIN_COMM_PROTOCOL}"
 
 # Dependencies of isaac-eval, including nepher, which reads the benchmark bundle. An empty
 # EVAL_REPO_COMMIT clones the default branch. Only the dependencies stay: the run uses /src/eval.

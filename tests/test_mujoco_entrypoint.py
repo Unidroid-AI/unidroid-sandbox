@@ -62,7 +62,7 @@ class Sandbox:
     def __init__(self, tmp_path):
         self.root = tmp_path
         p = tmp_path.as_posix()
-        for sub in ("out", "src/eval/scripts", "src/task", "src/brain-comm", "config", "build", "bin",
+        for sub in ("out", "src/eval/scripts", "src/task", "config", "build", "bin",
                     f"benchmark/{BENCHMARK_ID}"):
             (tmp_path / sub).mkdir(parents=True)
         (tmp_path / "src/eval/scripts/evaluate.py").write_text("# stub\n")
@@ -116,13 +116,23 @@ def test_a_good_run_needs_no_gpu_and_writes_the_result(box):
     assert f"BUNDLE={box.root.as_posix()}/benchmark/{BENCHMARK_ID}" in log
 
 
-def test_both_pinned_packages_are_installed_offline_without_dependencies(box):
+def test_only_the_task_package_is_installed_at_start_offline_without_dependencies(box):
     box.run()
     installs = [line for line in box.log.read_text().splitlines() if line.startswith("pip")]
-    assert len(installs) == 2
-    for line in installs:
-        assert all(flag in line for flag in ("--no-deps", "--no-index", "--no-build-isolation"))
-    assert "brain-comm" in installs[0] and "task" in installs[1]
+    assert len(installs) == 1
+    assert all(flag in installs[0] for flag in ("--no-deps", "--no-index", "--no-build-isolation"))
+    assert "task" in installs[0] and "brain-comm" not in installs[0]
+
+
+def test_brain_comm_belongs_to_the_image_so_nothing_for_it_is_mounted(box):
+    assert not (box.root / "src/brain-comm").exists()
+    assert box.run().returncode == 0
+    assert "/src/brain-comm" not in SCRIPT.read_text(encoding="utf-8")
+
+
+def test_a_missing_brain_comm_in_the_image_is_an_install_failure(box):
+    done = box.run(FAKE_IMPORT_FAIL="1")
+    assert done.returncode == 4 and box.status()["stage"] == "install" and box.result is None
 
 
 def test_an_install_failure_is_the_hosts_problem(box):
